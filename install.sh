@@ -161,13 +161,51 @@ ufw allow 2083/tcp comment 'panel admin'
 [[ "$INSTALL_HY2" =~ ^[Yy] ]] && ufw allow 443/udp comment 'hysteria2'
 
 # --- Start services ---
+# Order matters: the agent fetches its config from the panel, and xray-hy /
+# hysteria need the config the agent renders. Starting them all at once makes
+# xray-hy crash-loop on a missing config and hit the systemd start limit.
 echo "--- Starting services ---"
 systemctl enable claw-xray-hy
-systemctl enable --now clawpanel claw-agent
-# claw-agent generates /etc/claw-xray-hy/config.json on first sync, then starts xray-hy
-sleep 3
+[[ "$INSTALL_HY2" =~ ^[Yy] ]] && systemctl enable hysteria
+
+# 1. Panel first.
+systemctl enable --now clawpanel
+
+# 2. Wait until the panel answers, so the agent's first sync succeeds.
+echo -n "    waiting for panel "
+for _ in $(seq 1 30); do
+    if curl -fsS -o /dev/null http://127.0.0.1:3100/healthz 2>/dev/null; then
+        echo "ok"; break
+    fi
+    echo -n "."; sleep 1
+done
+
+# 3. Agent — renders /etc/claw-xray-hy/config.json (and the hysteria config)
+#    on its first sync, which runs immediately on start.
+systemctl enable --now claw-agent
+
+# 4. Wait for the rendered xray config before starting xray-hy.
+echo -n "    waiting for xray config "
+for _ in $(seq 1 60); do
+    if [[ -s /etc/claw-xray-hy/config.json ]]; then
+        echo "ok"; break
+    fi
+    echo -n "."; sleep 1
+done
 systemctl start claw-xray-hy || true
-[[ "$INSTALL_HY2" =~ ^[Yy] ]] && systemctl enable --now hysteria
+
+# 5. Hysteria — wait for its config too.
+if [[ "$INSTALL_HY2" =~ ^[Yy] ]]; then
+    echo -n "    waiting for hysteria config "
+    for _ in $(seq 1 30); do
+        if [[ -s /etc/hysteria/config.yaml ]]; then
+            echo "ok"; break
+        fi
+        echo -n "."; sleep 1
+    done
+    systemctl start hysteria || true
+fi
+
 systemctl start nginx
 
 echo

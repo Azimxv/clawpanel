@@ -1,6 +1,7 @@
 [Unit]
 Description=Hysteria2 server
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
