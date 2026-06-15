@@ -84,7 +84,13 @@ rm -f /usr/local/bin/xray-hy \
       /usr/local/bin/geosite.dat
 if [[ "$PURGE_HY2" -eq 1 ]]; then
     rm -f /usr/local/bin/hysteria
-    echo "    hysteria binary removed (--purge-hy2)"
+    # get.hy2.sh creates a dedicated system user; remove it too for a clean slate.
+    if id hysteria >/dev/null 2>&1; then
+        userdel hysteria 2>/dev/null || true
+        echo "    hysteria binary + system user removed (--purge-hy2)"
+    else
+        echo "    hysteria binary removed (--purge-hy2)"
+    fi
 fi
 
 echo "--- Removing nginx site configs ---"
