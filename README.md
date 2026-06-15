@@ -34,6 +34,24 @@ After install:
 - Panel: `https://<domain>:2083`
 - Default user: `admin` / `<random>`
 
+## Uninstall
+
+Remove ClawPanel and all its data from the server with one command:
+
+```bash
+cd clawpanel && bash uninstall.sh
+```
+
+It stops and removes every service, directory, binary, nginx site, and UFW rule
+the installer created, including the panel database (users, nodes). It asks for
+confirmation first; pass `--yes` to skip the prompt.
+
+Flags:
+- `--keep-certs` keep `/etc/letsencrypt` so a reinstall won't hit the Let's Encrypt rate limit
+- `--purge-hy2` also remove the hysteria binary
+
+It leaves SSH, the git repo, and system packages (nginx/certbot/ufw) untouched.
+
 ## Backup
 
 ```bash
@@ -57,4 +75,5 @@ systemd/       *.service units
 bin/           xray-hy.gz (custom Xray binary)
 fake-site/     masquerade page served by nginx
 install.sh
+uninstall.sh
 ```
