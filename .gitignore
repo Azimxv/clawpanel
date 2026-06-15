@@ -1,0 +1,12 @@
+*.bak
+*.bak-*
+*.pyc
+__pycache__/
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+*.log
+venv/
+node_modules/

@@ -1,0 +1,14 @@
+[Unit]
+Description=ClawPanel
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/clawpanel
+EnvironmentFile=/opt/clawpanel/.env
+ExecStart=/opt/clawpanel/venv/bin/uvicorn main:app --host 127.0.0.1 --port 3100
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

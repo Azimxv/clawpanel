@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Render /etc/hysteria/config.yaml from claw.db active users.
+
+Called by claw-agent after every successful xray sync (or by hand).
+Reloads hysteria.service if config changed.
+"""
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+DB = "/opt/clawpanel/data/claw.db"
+CFG = Path("/etc/hysteria/config.yaml")
+OBFS_FILE = Path("/etc/hysteria/obfs_password")
+
+TEMPLATE = """\
+listen: :443
+
+tls:
+  cert: /var/lib/marzban/certs/fullchain.pem
+  key: /var/lib/marzban/certs/key.pem
+
+masquerade:
+  type: file
+  file:
+    dir: /var/www/fake
+
+auth:
+  type: userpass
+  userpass:
+{users}
+
+quic:
+  initStreamReceiveWindow: 8388608
+  maxStreamReceiveWindow: 8388608
+  initConnReceiveWindow: 20971520
+  maxConnReceiveWindow: 20971520
+  maxIdleTimeout: 60s
+  maxIncomingStreams: 1024
+  disablePathMTUDiscovery: true
+
+ignoreClientBandwidth: true
+"""
+
+
+def main() -> int:
+    obfs = OBFS_FILE.read_text().strip()
+
+    con = sqlite3.connect(DB)
+    rows = con.execute(
+        "SELECT username, xray_uuid FROM users "
+        "WHERE is_active=1 AND (enabled_protocols LIKE '%hy2%' OR enabled_protocols='')"
+    ).fetchall()
+    con.close()
+
+    if rows:
+        users = "\n".join(f"    {u}: {p}" for u, p in rows)
+    else:
+        users = "    {}"  # empty mapping
+
+    new_cfg = TEMPLATE.format(obfs=obfs, users=users)
+
+    old_cfg = CFG.read_text() if CFG.exists() else ""
+    if new_cfg == old_cfg:
+        return 0
+
+    CFG.write_text(new_cfg)
+    CFG.chmod(0o640)
+
+    r = subprocess.run(
+        ["systemctl", "reload-or-restart", "hysteria.service"],
+        capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        print(f"reload failed: {r.stderr}", file=sys.stderr)
+        return 1
+    print(f"hysteria config updated, {len(rows)} users")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
