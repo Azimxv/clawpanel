@@ -107,11 +107,11 @@ export default function Settings() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Panel Version</span>
-              <div>v2.1.0</div>
+              <div>v2.2.0</div>
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Xray Build</span>
-              <div>finalmask 26.2.6</div>
+              <div>Xray 26.6.1</div>
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Protocols</span>
@@ -119,7 +119,7 @@ export default function Settings() {
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Architecture</span>
-              <div>Router \u2192 Node</div>
+              <div>Router → Node</div>
             </div>
           </div>
         </div>

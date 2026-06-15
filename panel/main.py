@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     await models.init_db()
     yield
 
-app = FastAPI(title="ClawPanel", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="ClawPanel", version="2.2.0", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 static_dir = BASE_DIR / "static"
