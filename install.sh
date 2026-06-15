@@ -73,11 +73,6 @@ certbot certonly --standalone --non-interactive --agree-tos --email "$LE_EMAIL" 
 ln -sf /etc/letsencrypt/live/"$DOMAIN"/fullchain.pem /var/lib/clawpanel/certs/fullchain.pem
 ln -sf /etc/letsencrypt/live/"$DOMAIN"/privkey.pem   /var/lib/clawpanel/certs/key.pem
 
-# --- Hysteria obfs password ---
-HY2_OBFS=$(tr -dc 'a-f0-9' </dev/urandom | head -c32)
-echo -n "$HY2_OBFS" > /etc/hysteria/obfs_password
-chmod 600 /etc/hysteria/obfs_password
-
 # --- Configs ---
 echo "--- Writing configs ---"
 
@@ -154,7 +149,11 @@ ufw allow 2083/tcp comment 'panel admin'
 
 # --- Start services ---
 echo "--- Starting services ---"
-systemctl enable --now clawpanel claw-xray-hy claw-agent
+systemctl enable claw-xray-hy
+systemctl enable --now clawpanel claw-agent
+# claw-agent generates /etc/claw-xray-hy/config.json on first sync, then starts xray-hy
+sleep 3
+systemctl start claw-xray-hy || true
 [[ "$INSTALL_HY2" =~ ^[Yy] ]] && systemctl enable --now hysteria
 systemctl start nginx
 
@@ -168,7 +167,6 @@ echo "  Password: $ADMIN_PASS"
 echo
 echo "  Agent secret: $AGENT_SECRET"
 echo "  XHTTP path:   $XHTTP_PATH"
-[[ "$INSTALL_HY2" =~ ^[Yy] ]] && echo "  HY2 obfs:     $HY2_OBFS"
 echo
 echo "  Save these credentials — they are not shown again."
 echo "============================================"

@@ -11,14 +11,13 @@ from pathlib import Path
 
 DB = "/opt/clawpanel/data/claw.db"
 CFG = Path("/etc/hysteria/config.yaml")
-OBFS_FILE = Path("/etc/hysteria/obfs_password")
 
 TEMPLATE = """\
 listen: :443
 
 tls:
-  cert: /var/lib/marzban/certs/fullchain.pem
-  key: /var/lib/marzban/certs/key.pem
+  cert: /var/lib/clawpanel/certs/fullchain.pem
+  key: /var/lib/clawpanel/certs/key.pem
 
 masquerade:
   type: file
@@ -44,8 +43,6 @@ ignoreClientBandwidth: true
 
 
 def main() -> int:
-    obfs = OBFS_FILE.read_text().strip()
-
     con = sqlite3.connect(DB)
     rows = con.execute(
         "SELECT username, xray_uuid FROM users "
@@ -58,7 +55,7 @@ def main() -> int:
     else:
         users = "    {}"  # empty mapping
 
-    new_cfg = TEMPLATE.format(obfs=obfs, users=users)
+    new_cfg = TEMPLATE.format(users=users)
 
     old_cfg = CFG.read_text() if CFG.exists() else ""
     if new_cfg == old_cfg:
