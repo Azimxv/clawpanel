@@ -30,9 +30,16 @@ INSTALL_HY2=${INSTALL_HY2:-Y}
 read -rp "Restore from backup tarball (path or empty for fresh): " RESTORE_PATH
 
 # --- Generate secrets ---
-ADMIN_PASS=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c16)
-AGENT_SECRET=$(tr -dc 'A-Za-z0-9_-' </dev/urandom | head -c43)
-XHTTP_PATH="/$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c12)"
+# SIGPIPE-safe: head reads a fixed chunk from /dev/urandom (infinite source, SIGPIPE harmless),
+# tr consumes it fully to EOF, then bash slices to length. No downstream close kills tr.
+randstr() {
+    local charset="$1" len="$2" out
+    out=$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc "$charset")
+    printf '%s' "${out:0:$len}"
+}
+ADMIN_PASS=$(randstr 'A-Za-z0-9' 16)
+AGENT_SECRET=$(randstr 'A-Za-z0-9_-' 43)
+XHTTP_PATH="/$(randstr 'A-Za-z0-9' 12)"
 
 echo
 echo "--- Installing system packages ---"
@@ -43,6 +50,12 @@ apt-get install -y -qq python3 python3-venv python3-pip nginx certbot ufw curl
 echo "--- Installing xray-hy ---"
 gunzip -c "$REPO_DIR/bin/xray-hy.gz" > /usr/local/bin/xray-hy
 chmod +x /usr/local/bin/xray-hy
+
+# geoip/geosite data — xray routing uses geoip:private; xray loads them from the binary's dir
+echo "--- Downloading geo data ---"
+GEO_BASE="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download"
+curl -fsSL -o /usr/local/bin/geoip.dat   "$GEO_BASE/geoip.dat"
+curl -fsSL -o /usr/local/bin/geosite.dat "$GEO_BASE/geosite.dat"
 
 # --- hysteria2 ---
 if [[ "$INSTALL_HY2" =~ ^[Yy] ]]; then

@@ -5,6 +5,7 @@ Called by claw-agent after every successful xray sync (or by hand).
 Reloads hysteria.service if config changed.
 """
 import sqlite3
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -53,7 +54,9 @@ def main() -> int:
     if rows:
         users = "\n".join(f"    {u}: {p}" for u, p in rows)
     else:
-        users = "    {}"  # empty mapping
+        # hysteria rejects an empty userpass map; insert a dummy
+        # credential that is never handed out to any client.
+        users = f"    _placeholder: {secrets.token_hex(16)}"
 
     new_cfg = TEMPLATE.format(users=users)
 
