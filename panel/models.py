@@ -12,6 +12,7 @@ DB_PATH = Path(__file__).parent / "data" / "claw.db"
 
 # --- Constants ---
 SETTING_AGENT_SECRET = "agent_secret"
+SETTING_HY2_OBFS_PASSWORD = "hy2_obfs_password"
 COOKIE_NAME = "claw_session"
 
 _ALLOWED_USER_COLS = frozenset({
@@ -102,6 +103,16 @@ async def init_db():
             await db.execute(
                 "INSERT INTO settings (key, value) VALUES (?, ?)",
                 (SETTING_AGENT_SECRET, secrets.token_urlsafe(32))
+            )
+
+        # Default hysteria2 salamander obfs password (shared: server config + client link)
+        existing = await db.execute_fetchall(
+            "SELECT value FROM settings WHERE key=?", (SETTING_HY2_OBFS_PASSWORD,)
+        )
+        if not existing:
+            await db.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                (SETTING_HY2_OBFS_PASSWORD, secrets.token_urlsafe(24))
             )
 
         # Migration: add enabled_protocols column if missing

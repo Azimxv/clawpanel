@@ -12,6 +12,7 @@ from pathlib import Path
 
 DB = "/opt/clawpanel/data/claw.db"
 CFG = Path("/etc/hysteria/config.yaml")
+SETTING_HY2_OBFS_PASSWORD = "hy2_obfs_password"
 
 TEMPLATE = """\
 listen: :443
@@ -19,7 +20,7 @@ listen: :443
 tls:
   cert: /var/lib/clawpanel/certs/fullchain.pem
   key: /var/lib/clawpanel/certs/key.pem
-
+{obfs}
 masquerade:
   type: file
   file:
@@ -42,6 +43,15 @@ quic:
 ignoreClientBandwidth: true
 """
 
+# Salamander obfuscation — makes the QUIC handshake look like random UDP so DPI
+# can't fingerprint it. Password is shared with the client link (panel settings).
+OBFS_BLOCK = """
+obfs:
+  type: salamander
+  salamander:
+    password: {password}
+"""
+
 
 def main() -> int:
     con = sqlite3.connect(DB)
@@ -49,7 +59,12 @@ def main() -> int:
         "SELECT username, xray_uuid FROM users "
         "WHERE is_active=1 AND (enabled_protocols LIKE '%hy2%' OR enabled_protocols='')"
     ).fetchall()
+    obfs_pw_row = con.execute(
+        "SELECT value FROM settings WHERE key=?", (SETTING_HY2_OBFS_PASSWORD,)
+    ).fetchone()
     con.close()
+
+    obfs = OBFS_BLOCK.format(password=obfs_pw_row[0]) if obfs_pw_row and obfs_pw_row[0] else ""
 
     if rows:
         users = "\n".join(f"    {u}: {p}" for u, p in rows)
@@ -58,7 +73,7 @@ def main() -> int:
         # credential that is never handed out to any client.
         users = f"    _placeholder: {secrets.token_hex(16)}"
 
-    new_cfg = TEMPLATE.format(users=users)
+    new_cfg = TEMPLATE.format(users=users, obfs=obfs)
 
     old_cfg = CFG.read_text() if CFG.exists() else ""
     if new_cfg == old_cfg:

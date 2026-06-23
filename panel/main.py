@@ -477,9 +477,11 @@ async def subscription(request: Request, token: str):
         raise HTTPException(403, "data limit exceeded")
 
     nodes = await models.get_active_nodes()
+    hy2_obfs = await models.get_setting(models.SETTING_HY2_OBFS_PASSWORD)
     links = generate_sub_links(
         user["xray_uuid"], user["username"], nodes,
-        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp")
+        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp"),
+        hy2_obfs_password=hy2_obfs,
     )
 
     content = "\n".join(links)
@@ -815,9 +817,11 @@ async def api_user_sub_info(request: Request, user_id: str):
     )
     if not user:
         raise HTTPException(404)
+    hy2_obfs = await models.get_setting(models.SETTING_HY2_OBFS_PASSWORD)
     links = generate_sub_links(
         user["xray_uuid"], user["username"], nodes,
-        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp")
+        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp"),
+        hy2_obfs_password=hy2_obfs,
     )
     scheme = request.headers.get("x-forwarded-proto", "https")
     host = PANEL_HOST or request.headers.get("host", "panel.clawvpn.lol")

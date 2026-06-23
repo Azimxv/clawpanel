@@ -1270,11 +1270,15 @@ def generate_amnezia_config(user_uuid: str, username: str, nodes: list,
 
 
 def generate_sub_links(user_uuid: str, username: str, nodes: list,
-                       enabled_protocols: str = "exit,direct,dns,icmp") -> list:
+                       enabled_protocols: str = "exit,direct,dns,icmp",
+                       hy2_obfs_password: str = "") -> list:
     """Generate subscription links for a user across all active nodes.
 
     enabled_protocols: comma-separated list of protocol keys to include.
     Valid keys: exit, direct, dns, icmp, h3-exit, h3-direct, socks, socks-pk
+
+    hy2_obfs_password: if set, the hy2 link advertises salamander obfuscation.
+    Must match the server config rendered by hy2-sync, or clients won't connect.
 
     XHTTP uses packet-up mode for better mobile stability.
     H3 links use QUIC/UDP (immune to TCP RST injection).
@@ -1312,9 +1316,13 @@ def generate_sub_links(user_uuid: str, username: str, nodes: list,
                 f"#{username}-xhttp"
             )
         if "hy2" in enabled:
+            obfs_q = ""
+            if hy2_obfs_password:
+                obfs_q = (f"&obfs=salamander"
+                          f"&obfs-password={_urlquote(hy2_obfs_password, safe='')}")
             links.append(
                 f"hysteria2://{_urlquote(username)}:{user_uuid}@{addr}:443"
-                f"?sni={addr}&alpn=h3"
+                f"?sni={addr}&alpn=h3{obfs_q}"
                 f"#{username}-hy2"
             )
         # XHTTP H3 (QUIC) — optional, immune to TCP RST
