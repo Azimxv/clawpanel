@@ -86,6 +86,22 @@ certbot certonly --standalone --non-interactive --agree-tos --email "$LE_EMAIL" 
 ln -sf /etc/letsencrypt/live/"$DOMAIN"/fullchain.pem /var/lib/clawpanel/certs/fullchain.pem
 ln -sf /etc/letsencrypt/live/"$DOMAIN"/privkey.pem   /var/lib/clawpanel/certs/key.pem
 
+# certbot renews the cert on a timer (~30 days before expiry), but the services
+# read the cert into memory at startup and won't pick up the new one on their
+# own. This deploy hook fires only after a successful renewal and reloads/restarts
+# everyone that uses the cert. Without it, ~60 days out clients would silently get
+# the expired cert.
+mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+cat > /etc/letsencrypt/renewal-hooks/deploy/clawpanel.sh <<'HOOK'
+#!/bin/bash
+# Reload/restart everything that serves the renewed TLS cert.
+# nginx terminates TLS for xhttp (443/2053/2083); reload is graceful.
+systemctl reload nginx 2>/dev/null || true
+# hysteria reads the cert files directly (UDP/443); needs a restart.
+systemctl restart hysteria 2>/dev/null || true
+HOOK
+chmod +x /etc/letsencrypt/renewal-hooks/deploy/clawpanel.sh
+
 # --- Configs ---
 echo "--- Writing configs ---"
 
