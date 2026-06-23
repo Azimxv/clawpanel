@@ -35,7 +35,7 @@ This will REMOVE:
   - /opt/clawpanel  /opt/claw-agent
   - /etc/claw-xray-hy  /etc/claw-agent  /etc/hysteria
   - /var/www/fake  /var/lib/clawpanel
-  - /usr/local/bin/{xray-hy,hy2-sync,geoip.dat,geosite.dat}
+  - /usr/local/bin/{xray-hy,hy2-sync,update-xray,geoip.dat,geosite.dat}
   - nginx sites: claw.conf, panel.conf
   - UFW rules added by the installer
   - ALL PANEL DATA (users, nodes, claw.db)
@@ -79,9 +79,13 @@ rm -rf /opt/clawpanel /opt/claw-agent \
 
 echo "--- Removing binaries ---"
 rm -f /usr/local/bin/xray-hy \
+      /usr/local/bin/xray-hy.bak-* \
       /usr/local/bin/hy2-sync \
+      /usr/local/bin/update-xray \
       /usr/local/bin/geoip.dat \
-      /usr/local/bin/geosite.dat
+      /usr/local/bin/geoip.dat.bak \
+      /usr/local/bin/geosite.dat \
+      /usr/local/bin/geosite.dat.bak
 if [[ "$PURGE_HY2" -eq 1 ]]; then
     rm -f /usr/local/bin/hysteria
     # get.hy2.sh creates a dedicated system user; remove it too for a clean slate.

@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+#
+# update-xray — upgrade the xray-hy core to a given (or latest) Xray-core release.
+#
+# Usage:
+#   update-xray              # upgrade to the latest stable Xray-core release
+#   update-xray v26.6.22     # upgrade to a specific tag
+#   update-xray 26.6.22      # 'v' prefix optional
+#
+# What it does:
+#   1. resolves the target version (latest from GitHub, or the one you pass)
+#   2. downloads the matching Xray-linux build for this machine's architecture
+#   3. validates the CURRENT config against the NEW binary (xray run -test)
+#   4. backs up the running binary, swaps it in, restarts claw-xray-hy
+#   5. verifies the service came back active
+#   6. updates the "Xray <version>" string shown in the panel Settings page
+#   7. rolls back to the backup automatically if anything fails
+#
+# Safe to re-run. Does not touch configs, certs, users, or any other service.
+
+set -euo pipefail
+
+BIN=/usr/local/bin/xray-hy
+CONFIG=/etc/claw-xray-hy/config.json
+SERVICE=claw-xray-hy
+STATIC_DIR=/opt/clawpanel/static
+TEMPLATE=/opt/clawpanel/templates/settings.html
+PANEL_SERVICE=clawpanel
+REPO_API="https://api.github.com/repos/XTLS/Xray-core"
+DL_BASE="https://github.com/XTLS/Xray-core/releases/download"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Extract a semver (X.Y.Z) from a binary's `version` output. Pure bash, no pipes
+# — a `... | head -1` here would SIGPIPE the producer and trip pipefail.
+bin_ver() {
+    local raw
+    raw="$("$1" version 2>/dev/null)" || true
+    [[ "$raw" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+[[ $EUID -eq 0 ]] || die "run as root"
+command -v curl >/dev/null  || die "curl not found"
+command -v unzip >/dev/null || die "unzip not found"
+[[ -x "$BIN" ]] || die "$BIN not found — is ClawPanel installed?"
+
+# --- architecture -> Xray asset name ---
+case "$(uname -m)" in
+    x86_64|amd64)        ASSET="Xray-linux-64.zip" ;;
+    aarch64|arm64)       ASSET="Xray-linux-arm64-v8a.zip" ;;
+    armv7l|armv7)        ASSET="Xray-linux-arm32-v7a.zip" ;;
+    *) die "unsupported architecture: $(uname -m)" ;;
+esac
+
+# --- resolve target version ---
+TARGET="${1:-}"
+if [[ -z "$TARGET" ]]; then
+    echo "--- Resolving latest Xray-core release ---"
+    LATEST_JSON="$(curl -fsSL "$REPO_API/releases/latest")" || die "could not reach GitHub"
+    [[ "$LATEST_JSON" =~ \"tag_name\":[[:space:]]*\"([^\"]+)\" ]] \
+        || die "could not parse latest version from GitHub"
+    TARGET="${BASH_REMATCH[1]}"
+fi
+[[ "$TARGET" == v* ]] || TARGET="v$TARGET"
+
+CURRENT="$(bin_ver "$BIN")"; CURRENT="${CURRENT:-unknown}"
+echo "Current: $CURRENT    Target: $TARGET    Arch asset: $ASSET"
+
+if [[ "v$CURRENT" == "$TARGET" ]]; then
+    echo "Already on $TARGET — nothing to do."
+    exit 0
+fi
+
+# --- download ---
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+echo "--- Downloading $TARGET ---"
+curl -fSL --retry 3 -o "$TMP/xray.zip" "$DL_BASE/$TARGET/$ASSET" \
+    || die "download failed for $TARGET/$ASSET (does this version/arch exist?)"
+unzip -oq "$TMP/xray.zip" -d "$TMP/x" || die "unzip failed"
+[[ -f "$TMP/x/xray" ]] || die "no 'xray' binary inside the archive"
+chmod +x "$TMP/x/xray"
+
+NEWVER="$(bin_ver "$TMP/x/xray")"
+echo "Downloaded binary reports version: ${NEWVER:-unknown}"
+
+# --- validate current config against the NEW binary BEFORE touching anything ---
+echo "--- Validating current config against new binary ---"
+"$TMP/x/xray" run -test -c "$CONFIG" >/dev/null 2>"$TMP/test.err" \
+    || { echo "--- config test output ---"; cat "$TMP/test.err"; die "new binary rejects the current config — aborting, nothing changed"; }
+echo "Config OK with new binary."
+
+# --- backup + swap ---
+TS=$(date +%s)
+BACKUP="$BIN.bak-$TS"
+cp -a "$BIN" "$BACKUP"
+echo "Backed up current binary -> $BACKUP"
+
+rollback() {
+    echo "!!! Upgrade failed — rolling back to $BACKUP" >&2
+    install -m 0755 "$BACKUP" "$BIN"
+    systemctl restart "$SERVICE" || true
+    echo "Rolled back to $CURRENT." >&2
+    exit 1
+}
+
+echo "--- Installing new binary ---"
+systemctl stop "$SERVICE"
+install -m 0755 "$TMP/x/xray" "$BIN"
+systemctl start "$SERVICE" || rollback
+sleep 2
+systemctl is-active --quiet "$SERVICE" || rollback
+
+# confirm the service is actually running the new version
+RUNNING="$(bin_ver "$BIN")"
+echo "Service active, running version: ${RUNNING:-unknown}"
+
+# --- update the version string shown in the panel ---
+# The panel renders a hard-coded "Xray <version>" string (SPA bundle + Jinja
+# fallback template). Patch both so Settings shows the new version.
+if [[ -n "$RUNNING" ]]; then
+    PATCHED=0
+    for f in "$STATIC_DIR"/assets/*.js "$TEMPLATE"; do
+        [[ -f "$f" ]] || continue
+        if grep -qE "Xray [0-9]+\.[0-9]+\.[0-9]+" "$f"; then
+            sed -i -E "s/Xray [0-9]+\.[0-9]+\.[0-9]+/Xray $RUNNING/g" "$f"
+            PATCHED=1
+        fi
+    done
+    if [[ "$PATCHED" -eq 1 ]]; then
+        systemctl restart "$PANEL_SERVICE" 2>/dev/null || true
+        echo "Panel version label updated to Xray $RUNNING (panel restarted)."
+    else
+        echo "Note: no 'Xray <version>' label found in panel assets — skipped UI update."
+    fi
+fi
+
+echo
+echo "============================================"
+echo "  xray-hy upgraded: $CURRENT -> ${RUNNING:-$TARGET}"
+echo "  Backup kept at: $BACKUP"
+echo "============================================"
+echo "Roll back manually with:"
+echo "  install -m0755 $BACKUP $BIN && systemctl restart $SERVICE"

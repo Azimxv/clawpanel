@@ -64,12 +64,28 @@ Restore by passing the tarball path during install.
 
 Pull the repo and re-run a subset of `install.sh` manually (rsync `panel/` to `/opt/clawpanel/`, restart `clawpanel.service`). Full re-run is destructive (overwrites secrets).
 
+### Upgrade the Xray core
+
+`update-xray` (installed to `/usr/local/bin`) upgrades the xray-hy core in place:
+
+```bash
+update-xray            # upgrade to the latest stable Xray-core release
+update-xray v26.6.22   # or pin a specific version
+```
+
+It downloads the official Xray build for the server's architecture, validates
+the current config against the new binary before swapping, restarts
+`claw-xray-hy`, updates the version label shown in the panel Settings page, and
+**rolls back automatically** if the service fails to come up. The previous
+binary is kept at `/usr/local/bin/xray-hy.bak-<timestamp>`.
+
 ## Layout
 
 ```
 panel/         FastAPI app (main.py, models.py, xray.py, templates/, static/)
 agent/         claw-agent.py
 scripts/       hy2-sync (renders /etc/hysteria/config.yaml from claw.db)
+               update-xray (in-place Xray core upgrade with rollback)
 nginx/         *.conf templates
 systemd/       *.service units
 bin/           xray-hy.gz (custom Xray binary)

@@ -71,6 +71,8 @@ cp -r "$REPO_DIR/panel/"* /opt/clawpanel/
 cp "$REPO_DIR/agent/agent.py" /opt/claw-agent/
 cp "$REPO_DIR/scripts/hy2-sync" /usr/local/bin/hy2-sync
 chmod +x /usr/local/bin/hy2-sync
+cp "$REPO_DIR/scripts/update-xray" /usr/local/bin/update-xray
+chmod +x /usr/local/bin/update-xray
 cp "$REPO_DIR/fake-site/index.html" /var/www/fake/
 
 # --- Python venv ---
