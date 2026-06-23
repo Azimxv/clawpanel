@@ -6,7 +6,7 @@ Self-hosted VPN panel: VLESS-XHTTP + Hysteria2, with custom xray-hy backend.
 
 - **Panel**: FastAPI + SQLite, listens on `127.0.0.1:3100`
 - **Agent**: syncs xray config from panel, every 60s
-- **xray-hy**: custom Xray 26.6.1 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
+- **xray-hy**: custom Xray 26.6.22 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
 - **Hysteria2**: standalone UDP/443, optional
 - **Nginx**: TLS termination on 443/2053/2083, masquerade fake site
 - **fail2ban + UFW** for SSH hardening
