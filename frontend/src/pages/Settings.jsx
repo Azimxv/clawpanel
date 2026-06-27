@@ -115,7 +115,7 @@ export default function Settings() {
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Protocols</span>
-              <div>VLESS XHTTP, HY2</div>
+              <div>VLESS XHTTP, HY2, REALITY</div>
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Architecture</span>

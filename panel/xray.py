@@ -166,6 +166,16 @@ ENABLE_XHTTP_H3 = os.environ.get("ENABLE_XHTTP_H3", "").lower() in ("1", "true",
 ENABLE_STEALTH = os.environ.get("ENABLE_STEALTH", "").lower() in ("1", "true", "yes")
 SUDOKU_PASSWORD = os.environ.get("SUDOKU_PASSWORD", "clawstealth2026")
 
+# REALITY inbound — stock xray feature, borrows a real site's TLS handshake.
+# Direct TCP port (not behind nginx); no LE cert needed. Stock-client compatible.
+ENABLE_REALITY = os.environ.get("ENABLE_REALITY", "").lower() in ("1", "true", "yes")
+REALITY_PORT = int(os.environ.get("REALITY_PORT", "8443"))
+REALITY_DEST = os.environ.get("REALITY_DEST", "www.microsoft.com:443")
+REALITY_SNI = os.environ.get("REALITY_SNI", "www.microsoft.com")
+REALITY_PRIVATE_KEY = os.environ.get("REALITY_PRIVATE_KEY", "")
+REALITY_PUBLIC_KEY = os.environ.get("REALITY_PUBLIC_KEY", "")
+REALITY_SHORT_ID = os.environ.get("REALITY_SHORT_ID", "")
+
 # Scrape SOCKS proxy — exposed on each node for external scrapers
 SCRAPE_SOCKS_PORT = int(os.environ.get("SCRAPE_SOCKS_PORT", "0"))
 SCRAPE_SOCKS_USER = os.environ.get("SCRAPE_SOCKS_USER", "")
@@ -401,6 +411,45 @@ def _build_hy2_inbound(tag: str, port: int, clients: list, cert: dict,
     }
 
 
+def _build_vless_reality_inbound(tag: str, port: int, clients: list) -> dict:
+    """Build a VLESS REALITY inbound — direct TCP, no nginx, no LE cert.
+
+    REALITY performs the TLS 1.3 handshake of a real target site (dest),
+    so to a DPI/active prober the connection looks like traffic to that site.
+    Clients use flow xtls-rprx-vision. Stock xray feature (no fork needed).
+    """
+    reality_clients = [
+        {"id": c["id"], "email": c.get("email", ""), "flow": "xtls-rprx-vision"}
+        for c in clients
+    ]
+    return {
+        "tag": tag,
+        "listen": "0.0.0.0",
+        "port": port,
+        "protocol": "vless",
+        "settings": {
+            "clients": reality_clients,
+            "decryption": "none"
+        },
+        "streamSettings": {
+            "network": "raw",
+            "security": "reality",
+            "realitySettings": {
+                "show": False,
+                "dest": REALITY_DEST,
+                "xver": 0,
+                "serverNames": [REALITY_SNI],
+                "privateKey": REALITY_PRIVATE_KEY,
+                "shortIds": [REALITY_SHORT_ID]
+            }
+        },
+        "sniffing": {
+            "enabled": True,
+            "destOverride": ["http", "tls", "quic"]
+        }
+    }
+
+
 # ---------------------------------------------------------------------------
 # Main config builder
 # ---------------------------------------------------------------------------
@@ -551,6 +600,15 @@ def build_xray_config(clients: List[Dict], node_address: str,
         _build_vless_xhttp_inbound("VLESS-XHTTP-EXIT", 10443, vless_clients, xhttp_path),
         _build_vless_xhttp_inbound("VLESS-XHTTP-DIRECT", 12052, vless_clients, xhttp_path),
     ]
+
+    # VLESS REALITY — direct TCP, borrows a real site's TLS handshake, no LE cert.
+    # NOTE: shares port 8443 with H3-EXIT, but the two are mutually exclusive in
+    # practice (H3 is off on prod). Don't enable ENABLE_XHTTP_H3 + ENABLE_REALITY
+    # on the same default port.
+    if ENABLE_REALITY and REALITY_PRIVATE_KEY:
+        inbounds.append(
+            _build_vless_reality_inbound("VLESS-REALITY", REALITY_PORT, vless_clients)
+        )
 
     # VLESS XHTTP H3 — direct QUIC/UDP, no nginx (immune to TCP RST)
     # Only enabled with ENABLE_XHTTP_H3=1 — needs xray-hy with H3 support
@@ -1324,6 +1382,17 @@ def generate_sub_links(user_uuid: str, username: str, nodes: list,
                 f"hysteria2://{_urlquote(username)}:{user_uuid}@{addr}:443"
                 f"?sni={addr}&alpn=h3{obfs_q}"
                 f"#{username}-hy2"
+            )
+        # VLESS REALITY — direct TCP, mimics a real site's TLS handshake.
+        # pbk/sid/sni/port come from module-level env (set in panel .env).
+        if "reality" in enabled and REALITY_PUBLIC_KEY:
+            links.append(
+                f"vless://{user_uuid}@{addr}:{REALITY_PORT}"
+                f"?encryption=none&flow=xtls-rprx-vision&security=reality"
+                f"&type=tcp&sni={_urlquote(REALITY_SNI, safe='')}&fp=firefox"
+                f"&pbk={_urlquote(REALITY_PUBLIC_KEY, safe='')}"
+                f"&sid={_urlquote(REALITY_SHORT_ID, safe='')}&spx=%2F"
+                f"#{username}-reality"
             )
         # XHTTP H3 (QUIC) — optional, immune to TCP RST
         if "h3-exit" in enabled:

@@ -1,6 +1,6 @@
 # ClawPanel
 
-Self-hosted VPN panel: VLESS-XHTTP + Hysteria2, with custom xray-hy backend.
+Self-hosted VPN panel: VLESS-XHTTP + Hysteria2 + VLESS-REALITY, with custom xray-hy backend.
 
 ## Stack
 
@@ -8,6 +8,7 @@ Self-hosted VPN panel: VLESS-XHTTP + Hysteria2, with custom xray-hy backend.
 - **Agent**: syncs xray config from panel, every 60s
 - **xray-hy**: custom Xray 26.6.22 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
 - **Hysteria2**: standalone UDP/443, optional
+- **VLESS-REALITY**: optional 3rd protocol, direct TCP (default 8443), borrows a real site's TLS handshake — no LE cert. Off by default; enable via `ENABLE_REALITY=1` in panel `.env` (see `panel/env.template`). Client SNI must exactly match `REALITY_SNI`.
 - **Nginx**: TLS termination on 443/2053/2083, masquerade fake site
 - **fail2ban + UFW** for SSH hardening
 

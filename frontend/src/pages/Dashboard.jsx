@@ -39,7 +39,7 @@ export default function Dashboard() {
         <StatCard icon={Users} label="Users" value={stats.total_users} sub={`${stats.active_users} active`} color="bg-claw-accent/15 text-claw-accent" />
         <StatCard icon={Server} label="Nodes" value={stats.total_nodes} sub={`${stats.online_nodes} online`} color="bg-claw-green/15 text-claw-green" />
         <StatCard icon={Activity} label="Traffic" value={stats.total_traffic} color="bg-claw-amber/15 text-claw-amber" />
-        <StatCard icon={Shield} label="Protocols" value="2" sub="VLESS XHTTP + HY2" color="bg-claw-red/15 text-claw-red" />
+        <StatCard icon={Shield} label="Protocols" value="3" sub="VLESS XHTTP + HY2 + REALITY" color="bg-claw-red/15 text-claw-red" />
       </div>
     </div>
   );
