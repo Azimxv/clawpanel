@@ -230,10 +230,9 @@ function CreateUserModal({ open, onClose, onCreated }) {
 
 function EditUserModal({ user, onClose, onSaved, onResetUuid, onCopy }) {
   const PROTOS = [
-    { key: 'exit', label: 'VLESS EXIT', color: 'text-claw-accent' },
     { key: 'direct', label: 'VLESS DIRECT', color: 'text-claw-green' },
-    { key: 'dns', label: 'HY2 DNS', color: 'text-claw-amber' },
-    { key: 'icmp', label: 'HY2 ICMP', color: 'text-claw-red' },
+    { key: 'hy2', label: 'HYSTERIA2', color: 'text-claw-amber' },
+    { key: 'reality', label: 'VLESS REALITY', color: 'text-claw-accent' },
   ];
 
   const [protos, setProtos] = useState(new Set());
@@ -241,7 +240,7 @@ function EditUserModal({ user, onClose, onSaved, onResetUuid, onCopy }) {
 
   useEffect(() => {
     if (user) {
-      const ep = user.enabled_protocols || 'exit,direct,dns,icmp';
+      const ep = user.enabled_protocols || 'direct,hy2,reality';
       setProtos(new Set(ep.split(',').map(p => p.trim())));
     }
   }, [user]);

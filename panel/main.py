@@ -480,7 +480,7 @@ async def subscription(request: Request, token: str):
     hy2_obfs = await models.get_setting(models.SETTING_HY2_OBFS_PASSWORD)
     links = generate_sub_links(
         user["xray_uuid"], user["username"], nodes,
-        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp"),
+        enabled_protocols=user.get("enabled_protocols", "direct,hy2,reality"),
         hy2_obfs_password=hy2_obfs,
     )
 
@@ -529,7 +529,7 @@ async def subscription_amnezia(request: Request, token: str):
     nodes = await models.get_active_nodes()
     config = generate_amnezia_config(
         user["xray_uuid"], user["username"], nodes,
-        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp")
+        enabled_protocols=user.get("enabled_protocols", "direct,hy2,reality")
     )
 
     from fastapi.responses import JSONResponse
@@ -799,7 +799,7 @@ async def api_update_protocols(request: Request, user_id: str):
     body = await request.json()
     protocols = body.get("enabled_protocols", "")
     # Validate: only allow known protocol keys
-    valid = {"exit", "direct", "socks", "socks-pk"}  # dns/icmp removed: HY2 disabled
+    valid = {"exit", "direct", "hy2", "reality"}  # socks/dns/icmp removed: unused
     parts = [p.strip().lower() for p in protocols.split(",") if p.strip()]
     cleaned = ",".join(p for p in parts if p in valid)
     if not cleaned:
@@ -820,7 +820,7 @@ async def api_user_sub_info(request: Request, user_id: str):
     hy2_obfs = await models.get_setting(models.SETTING_HY2_OBFS_PASSWORD)
     links = generate_sub_links(
         user["xray_uuid"], user["username"], nodes,
-        enabled_protocols=user.get("enabled_protocols", "exit,direct,hy2,dns,icmp"),
+        enabled_protocols=user.get("enabled_protocols", "direct,hy2,reality"),
         hy2_obfs_password=hy2_obfs,
     )
     scheme = request.headers.get("x-forwarded-proto", "https")

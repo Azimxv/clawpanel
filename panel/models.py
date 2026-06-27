@@ -169,7 +169,7 @@ async def create_user(username: str, note: str = "", data_limit: int = 0, expire
         now = time.time()
         await db.execute(
             "INSERT INTO users (id, username, xray_uuid, sub_token, data_limit, expire_at, note, enabled_protocols) VALUES (?,?,?,?,?,?,?,?)",
-            (uid, username, xray_uuid, sub_token, data_limit, expire_at, note, "direct,hy2")
+            (uid, username, xray_uuid, sub_token, data_limit, expire_at, note, "direct,hy2,reality")
         )
         await db.commit()
         return {
