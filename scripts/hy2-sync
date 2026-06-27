@@ -36,11 +36,10 @@ quic:
   maxStreamReceiveWindow: 8388608
   initConnReceiveWindow: 20971520
   maxConnReceiveWindow: 20971520
-  maxIdleTimeout: 60s
-  maxIncomingStreams: 1024
-  disablePathMTUDiscovery: true
 
-ignoreClientBandwidth: true
+bandwidth:
+  up: 1 gbps
+  down: 1 gbps
 """
 
 # Salamander obfuscation — makes the QUIC handshake look like random UDP so DPI
