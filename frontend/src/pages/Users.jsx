@@ -230,7 +230,7 @@ function CreateUserModal({ open, onClose, onCreated }) {
 
 function EditUserModal({ user, onClose, onSaved, onResetUuid, onCopy }) {
   const PROTOS = [
-    { key: 'direct', label: 'VLESS DIRECT', color: 'text-claw-green' },
+    { key: 'direct', label: 'VLESS XHTTP', color: 'text-claw-green' },
     { key: 'hy2', label: 'HYSTERIA2', color: 'text-claw-amber' },
     { key: 'reality', label: 'VLESS REALITY', color: 'text-claw-accent' },
   ];
