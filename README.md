@@ -6,7 +6,7 @@ Self-hosted VPN panel: VLESS-XHTTP + Hysteria2 + VLESS-REALITY, with custom xray
 
 - **Panel**: FastAPI + SQLite, listens on `127.0.0.1:3100`
 - **Agent**: syncs xray config from panel, every 60s
-- **xray-hy**: custom Xray 26.6.22 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
+- **xray-hy**: custom Xray 26.6.27 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
 - **Hysteria2**: standalone UDP/443, optional
 - **VLESS-REALITY**: optional 3rd protocol, direct TCP (default 8443), borrows a real site's TLS handshake — no LE cert. Off by default; enable via `ENABLE_REALITY=1` in panel `.env` (see `panel/env.template`). Client SNI must exactly match `REALITY_SNI`.
 - **Nginx**: TLS termination on 443/2053/2083, masquerade fake site
@@ -71,7 +71,7 @@ Pull the repo and re-run a subset of `install.sh` manually (rsync `panel/` to `/
 
 ```bash
 update-xray            # upgrade to the latest stable Xray-core release
-update-xray v26.6.22   # or pin a specific version
+update-xray v26.6.27   # or pin a specific version
 ```
 
 It downloads the official Xray build for the server's architecture, validates

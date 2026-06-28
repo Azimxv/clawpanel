@@ -111,7 +111,7 @@ export default function Settings() {
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Xray Build</span>
-              <div>Xray 26.6.22</div>
+              <div>Xray 26.6.27</div>
             </div>
             <div className="bg-claw-bg rounded-lg px-3 py-2">
               <span className="text-claw-muted text-xs">Protocols</span>
