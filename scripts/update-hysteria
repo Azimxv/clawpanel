@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+#
+# update-hysteria — upgrade the hysteria2 core to a given (or latest) release.
+#
+# Usage:
+#   update-hysteria              # upgrade to the latest stable hysteria release
+#   update-hysteria v2.9.3       # upgrade to a specific version
+#   update-hysteria 2.9.3        # 'v' prefix optional
+#   update-hysteria app/v2.9.3   # full tag also accepted
+#
+# What it does:
+#   1. resolves the target version (latest from GitHub, or the one you pass)
+#   2. downloads the matching hysteria build for this machine's architecture
+#   3. backs up the running binary, swaps it in, restarts hysteria
+#   4. verifies the service came back active and reports the running version
+#   5. rolls back to the backup automatically if anything fails
+#
+# hysteria has no `-test` config check like xray, so validation is "does the
+# service come back active on the new binary". The rendered config is untouched.
+#
+# Safe to re-run. Does not touch configs, certs, users, or any other service.
+
+set -euo pipefail
+
+BIN=/usr/local/bin/hysteria
+SERVICE=hysteria
+REPO_API="https://api.github.com/repos/apernet/hysteria"
+DL_BASE="https://github.com/apernet/hysteria/releases/download"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Extract a semver (X.Y.Z) from the binary's `version` output. Pure bash, no
+# pipes — a `... | head` here would SIGPIPE the producer and trip pipefail.
+bin_ver() {
+    local raw
+    raw="$("$1" version 2>/dev/null)" || true
+    [[ "$raw" =~ [Vv]ersion:[[:space:]]*v?([0-9]+\.[0-9]+\.[0-9]+) ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+[[ $EUID -eq 0 ]] || die "run as root"
+command -v curl >/dev/null || die "curl not found"
+[[ -x "$BIN" ]] || die "$BIN not found — is hysteria installed?"
+
+# --- architecture -> hysteria asset name ---
+case "$(uname -m)" in
+    x86_64|amd64)  ASSET="hysteria-linux-amd64" ;;
+    aarch64|arm64) ASSET="hysteria-linux-arm64" ;;
+    armv7l|armv7)  ASSET="hysteria-linux-arm" ;;
+    *) die "unsupported architecture: $(uname -m)" ;;
+esac
+
+# --- resolve target version ---
+TARGET="${1:-}"
+if [[ -z "$TARGET" ]]; then
+    echo "--- Resolving latest hysteria release ---"
+    LATEST_JSON="$(curl -fsSL "$REPO_API/releases/latest")" || die "could not reach GitHub"
+    [[ "$LATEST_JSON" =~ \"tag_name\":[[:space:]]*\"([^\"]+)\" ]] \
+        || die "could not parse latest version from GitHub"
+    TARGET="${BASH_REMATCH[1]}"
+fi
+# normalise: releases are tagged 'app/vX.Y.Z'. Accept bare '2.9.3', 'v2.9.3',
+# or the full 'app/v2.9.3'.
+TARGET="${TARGET#app/}"
+[[ "$TARGET" == v* ]] || TARGET="v$TARGET"
+TAG="app/$TARGET"
+
+CURRENT="$(bin_ver "$BIN")"; CURRENT="${CURRENT:-unknown}"
+echo "Current: $CURRENT    Target: $TARGET    Arch asset: $ASSET"
+
+if [[ "v$CURRENT" == "$TARGET" ]]; then
+    echo "Already on $TARGET — nothing to do."
+    exit 0
+fi
+
+# --- download ---
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+echo "--- Downloading $TAG/$ASSET ---"
+curl -fSL --retry 3 -o "$TMP/hysteria" "$DL_BASE/$TAG/$ASSET" \
+    || die "download failed for $TAG/$ASSET (does this version/arch exist?)"
+chmod +x "$TMP/hysteria"
+
+NEWVER="$(bin_ver "$TMP/hysteria")"
+[[ -n "$NEWVER" ]] || die "downloaded file does not report a version — aborting"
+echo "Downloaded binary reports version: $NEWVER"
+
+# --- backup + swap ---
+TS=$(date +%s)
+BACKUP="$BIN.bak-$TS"
+cp -a "$BIN" "$BACKUP"
+echo "Backed up current binary -> $BACKUP"
+
+rollback() {
+    echo "!!! Upgrade failed — rolling back to $BACKUP" >&2
+    install -m 0755 "$BACKUP" "$BIN"
+    systemctl restart "$SERVICE" || true
+    echo "Rolled back to $CURRENT." >&2
+    exit 1
+}
+
+echo "--- Installing new binary ---"
+systemctl stop "$SERVICE"
+install -m 0755 "$TMP/hysteria" "$BIN"
+systemctl start "$SERVICE" || rollback
+sleep 2
+systemctl is-active --quiet "$SERVICE" || rollback
+
+RUNNING="$(bin_ver "$BIN")"
+echo "Service active, running version: ${RUNNING:-unknown}"
+
+echo
+echo "============================================"
+echo "  hysteria upgraded: $CURRENT -> ${RUNNING:-$TARGET}"
+echo "  Backup kept at: $BACKUP"
+echo "============================================"
+echo "Roll back manually with:"
+echo "  install -m0755 $BACKUP $BIN && systemctl restart $SERVICE"

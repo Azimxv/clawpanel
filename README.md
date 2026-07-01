@@ -80,6 +80,21 @@ the current config against the new binary before swapping, restarts
 **rolls back automatically** if the service fails to come up. The previous
 binary is kept at `/usr/local/bin/xray-hy.bak-<timestamp>`.
 
+### Upgrade the hysteria2 core
+
+`update-hysteria` works the same way for the hysteria2 binary:
+
+```bash
+update-hysteria            # upgrade to the latest stable hysteria release
+update-hysteria v2.9.3     # or pin a specific version
+```
+
+It downloads the official build for the server's architecture, backs up the
+running binary, swaps it in, restarts `hysteria`, and **rolls back
+automatically** if the service fails to come up. hysteria has no config
+`-test`, so validation is "does the service come back active". The previous
+binary is kept at `/usr/local/bin/hysteria.bak-<timestamp>`.
+
 ## Layout
 
 ```
@@ -87,6 +102,7 @@ panel/         FastAPI app (main.py, models.py, xray.py, templates/, static/)
 agent/         claw-agent.py
 scripts/       hy2-sync (renders /etc/hysteria/config.yaml from claw.db)
                update-xray (in-place Xray core upgrade with rollback)
+               update-hysteria (in-place hysteria2 upgrade with rollback)
 nginx/         *.conf templates
 systemd/       *.service units
 bin/           xray-hy.gz (custom Xray binary)

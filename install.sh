@@ -73,6 +73,8 @@ cp "$REPO_DIR/scripts/hy2-sync" /usr/local/bin/hy2-sync
 chmod +x /usr/local/bin/hy2-sync
 cp "$REPO_DIR/scripts/update-xray" /usr/local/bin/update-xray
 chmod +x /usr/local/bin/update-xray
+cp "$REPO_DIR/scripts/update-hysteria" /usr/local/bin/update-hysteria
+chmod +x /usr/local/bin/update-hysteria
 cp "$REPO_DIR/fake-site/index.html" /var/www/fake/
 
 # --- Python venv ---
@@ -173,6 +175,7 @@ con.close()
 echo "--- Configuring UFW ---"
 ufw --force enable
 ufw allow 22/tcp comment 'SSH'
+ufw allow 80/tcp comment 'ACME http-01 (certbot standalone renewal)'
 ufw allow 443/tcp comment 'nginx TLS'
 ufw allow 2053/tcp comment 'panel/xray'
 ufw allow 2083/tcp comment 'panel admin'
