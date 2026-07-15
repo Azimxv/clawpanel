@@ -371,7 +371,7 @@ async def record_traffic_batch(node_name: str, traffic: dict):
             if up == 0 and down == 0:
                 continue
             user_rows = await db.execute_fetchall(
-                "SELECT id FROM users WHERE username=?", (email,)
+                "SELECT id FROM users WHERE username=? COLLATE NOCASE", (email,)
             )
             if not user_rows:
                 continue

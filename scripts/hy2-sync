@@ -13,6 +13,8 @@ from pathlib import Path
 DB = "/opt/clawpanel/data/claw.db"
 CFG = Path("/etc/hysteria/config.yaml")
 SETTING_HY2_OBFS_PASSWORD = "hy2_obfs_password"
+SETTING_HY2_STATS_SECRET = "hy2_stats_secret"
+SECRET_FILE = Path("/etc/hysteria/stats.secret")
 
 TEMPLATE = """\
 listen: :443
@@ -40,6 +42,10 @@ quic:
 bandwidth:
   up: 1 gbps
   down: 1 gbps
+
+trafficStats:
+  listen: 127.0.0.1:9999
+  secret: {stats_secret}
 """
 
 # Salamander obfuscation — makes the QUIC handshake look like random UDP so DPI
@@ -61,7 +67,23 @@ def main() -> int:
     obfs_pw_row = con.execute(
         "SELECT value FROM settings WHERE key=?", (SETTING_HY2_OBFS_PASSWORD,)
     ).fetchone()
+    stats_row = con.execute(
+        "SELECT value FROM settings WHERE key=?", (SETTING_HY2_STATS_SECRET,)
+    ).fetchone()
+    if stats_row and stats_row[0]:
+        stats_secret = stats_row[0]
+    else:
+        stats_secret = secrets.token_hex(16)
+        con.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (SETTING_HY2_STATS_SECRET, stats_secret),
+        )
+        con.commit()
     con.close()
+
+    # hand the stats secret to the local agent (co-located with hysteria)
+    SECRET_FILE.write_text(stats_secret)
+    SECRET_FILE.chmod(0o600)
 
     obfs = OBFS_BLOCK.format(password=obfs_pw_row[0]) if obfs_pw_row and obfs_pw_row[0] else ""
 
@@ -72,7 +94,7 @@ def main() -> int:
         # credential that is never handed out to any client.
         users = f"    _placeholder: {secrets.token_hex(16)}"
 
-    new_cfg = TEMPLATE.format(users=users, obfs=obfs)
+    new_cfg = TEMPLATE.format(users=users, obfs=obfs, stats_secret=stats_secret)
 
     old_cfg = CFG.read_text() if CFG.exists() else ""
     if new_cfg == old_cfg:

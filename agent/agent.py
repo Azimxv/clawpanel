@@ -36,7 +36,9 @@ XRAY_HY_CFG     = os.environ.get("XRAY_HY_CFG",     "/etc/claw-xray-hy/config.js
 XRAY_HY_SERVICE = os.environ.get("XRAY_HY_SERVICE", "claw-xray-hy")
 XRAY_API_PORT   = int(os.environ.get("XRAY_API_PORT",  "10085"))
 SYNC_INTERVAL   = int(os.environ.get("SYNC_INTERVAL",  "60"))
-AGENT_VERSION   = "2.3.0"
+HY2_STATS_ADDR  = os.environ.get("HY2_STATS_ADDR", "127.0.0.1:9999")
+HY2_STATS_SECRET_FILE = os.environ.get("HY2_STATS_SECRET_FILE", "/etc/hysteria/stats.secret")
+AGENT_VERSION   = "2.4.0"
 
 NGINX_CONF_PATH = "/etc/nginx/sites-enabled/claw.conf"
 FAKE_HTML_PATH  = "/var/www/fake/index.html"
@@ -148,31 +150,61 @@ def ensure_nginx():
     return True
 
 
+def read_hy2_traffic():
+    """Per-user Hysteria2 traffic from its trafficStats API. ?clear=1 resets
+    counters (mirrors xray --reset). Returns {email: {up, down}}. Graceful:
+    missing secret file (remote node / hy2 off) or any error -> {}."""
+    try:
+        secret = Path(HY2_STATS_SECRET_FILE).read_text().strip()
+    except Exception:
+        return {}
+    try:
+        req = urllib.request.Request(
+            f"http://{HY2_STATS_ADDR}/traffic?clear=1",
+            headers={"Authorization": secret},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        out = {}
+        for user, v in data.items():
+            # hysteria tx = download to client, rx = upload from client
+            out[user] = {"up": int(v.get("rx", 0)), "down": int(v.get("tx", 0))}
+        return out
+    except Exception as e:
+        log.debug(f"hy2 traffic read failed: {e}")
+        return {}
+
+
 def read_traffic():
+    """Merged per-user deltas from xray stats API + Hysteria2 trafficStats.
+    Both are read-and-reset, so this must run once per heartbeat."""
+    stats = {}
     try:
         r = subprocess.run(
             [XRAY_HY_BIN, "api", "statsquery",
              f"--server=127.0.0.1:{XRAY_API_PORT}", "--pattern=user", "--reset"],
             capture_output=True, timeout=10
         )
-        if r.returncode != 0:
-            return {}
-        stats = {}
-        for item in json.loads(r.stdout).get("stat", []):
-            parts = item.get("name", "").split(">>>")
-            if len(parts) < 4:
-                continue
-            email = parts[1]
-            val = int(item.get("value", 0))
-            stats.setdefault(email, {"up": 0, "down": 0})
-            if parts[3] == "uplink":
-                stats[email]["up"] += val
-            elif parts[3] == "downlink":
-                stats[email]["down"] += val
-        return stats
+        if r.returncode == 0:
+            for item in json.loads(r.stdout).get("stat", []):
+                parts = item.get("name", "").split(">>>")
+                if len(parts) < 4:
+                    continue
+                email = parts[1]
+                val = int(item.get("value", 0))
+                stats.setdefault(email, {"up": 0, "down": 0})
+                if parts[3] == "uplink":
+                    stats[email]["up"] += val
+                elif parts[3] == "downlink":
+                    stats[email]["down"] += val
     except Exception as e:
-        log.debug(f"traffic read failed: {e}")
-        return {}
+        log.debug(f"xray traffic read failed: {e}")
+    # merge Hysteria2 traffic (routers etc. use hy2, invisible to xray stats)
+    for email, v in read_hy2_traffic().items():
+        stats.setdefault(email, {"up": 0, "down": 0})
+        stats[email]["up"] += v["up"]
+        stats[email]["down"] += v["down"]
+    return stats
 
 
 def check_binary_update():
