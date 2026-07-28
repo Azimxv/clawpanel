@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 #
-# update-xray — upgrade the xray-hy core to a given (or latest) Xray-core release.
+# update-xray — upgrade the xray-hy core to a given (or newest) Xray-core release.
 #
 # Usage:
-#   update-xray              # upgrade to the latest stable Xray-core release
-#   update-xray v26.6.22     # upgrade to a specific tag
-#   update-xray 26.6.22      # 'v' prefix optional
+#   update-xray                          # upgrade to the newest release
+#   update-xray v26.7.28                 # upgrade to a specific tag
+#   update-xray 26.7.28                  # 'v' prefix optional
+#   update-xray --stable-only            # only releases GitHub flags "latest"
+#   update-xray --allow-downgrade <tag>  # permit moving to an older version
+#
+# On resolving "newest": XTLS ships nearly every Xray-core release as a GitHub
+# *pre-release*, so /releases/latest lags months behind — it still pointed at
+# v26.3.27 when v26.7.28 was out, i.e. a plain `update-xray` used to roll the
+# core BACKWARDS. We therefore take the newest entry from /releases instead;
+# --stable-only restores the old /releases/latest behaviour if you want it.
 #
 # What it does:
-#   1. resolves the target version (latest from GitHub, or the one you pass)
+#   1. resolves the target version (newest from GitHub, or the one you pass)
+#      and refuses to go backwards unless --allow-downgrade is given
 #   2. downloads the matching Xray-linux build for this machine's architecture
 #   3. validates the CURRENT config against the NEW binary (xray run -test)
 #   4. backs up the running binary, swaps it in, restarts claw-xray-hy
@@ -39,6 +48,14 @@ bin_ver() {
     [[ "$raw" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
 
+# True when $1 is strictly older than $2 (both bare semver, no 'v'). `sed -n 1p`
+# and not `head -1` for the reason above — head would SIGPIPE sort.
+ver_older() {
+    local oldest
+    oldest="$(printf '%s\n%s\n' "$1" "$2" | sort -V | sed -n 1p)"
+    [[ "$oldest" == "$1" && "$1" != "$2" ]]
+}
+
 [[ $EUID -eq 0 ]] || die "run as root"
 command -v curl >/dev/null  || die "curl not found"
 command -v unzip >/dev/null || die "unzip not found"
@@ -52,13 +69,36 @@ case "$(uname -m)" in
     *) die "unsupported architecture: $(uname -m)" ;;
 esac
 
+# --- arguments ---
+STABLE_ONLY=0
+ALLOW_DOWNGRADE=0
+TARGET=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --stable-only)     STABLE_ONLY=1 ;;
+        --allow-downgrade) ALLOW_DOWNGRADE=1 ;;
+        -*)                die "unknown option: $1 (see the header of $0)" ;;
+        *)                 [[ -z "$TARGET" ]] || die "two versions given: $TARGET and $1"
+                           TARGET="$1" ;;
+    esac
+    shift
+done
+
 # --- resolve target version ---
-TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
-    echo "--- Resolving latest Xray-core release ---"
-    LATEST_JSON="$(curl -fsSL "$REPO_API/releases/latest")" || die "could not reach GitHub"
-    [[ "$LATEST_JSON" =~ \"tag_name\":[[:space:]]*\"([^\"]+)\" ]] \
-        || die "could not parse latest version from GitHub"
+    if [[ "$STABLE_ONLY" -eq 1 ]]; then
+        echo "--- Resolving the release GitHub flags as latest ---"
+        REL_URL="$REPO_API/releases/latest"
+    else
+        echo "--- Resolving newest Xray-core release ---"
+        REL_URL="$REPO_API/releases?per_page=1"
+    fi
+    REL_JSON="$(curl -fsSL "$REL_URL")" || die "could not reach GitHub"
+    # /releases returns newest first, and tag_name appears once per release
+    # object, so matching the FIRST occurrence covers both endpoints — and
+    # keeps this script free of a jq dependency.
+    [[ "$REL_JSON" =~ \"tag_name\":[[:space:]]*\"([^\"]+)\" ]] \
+        || die "could not parse the release tag from GitHub"
     TARGET="${BASH_REMATCH[1]}"
 fi
 [[ "$TARGET" == v* ]] || TARGET="v$TARGET"
@@ -69,6 +109,15 @@ echo "Current: $CURRENT    Target: $TARGET    Arch asset: $ASSET"
 if [[ "v$CURRENT" == "$TARGET" ]]; then
     echo "Already on $TARGET — nothing to do."
     exit 0
+fi
+
+# --- never move backwards by accident ---
+# The config test below only proves the OLD config parses; it would happily
+# let a months-old core replace a working one. Catch that here instead.
+if [[ "$CURRENT" != "unknown" && "$ALLOW_DOWNGRADE" -eq 0 ]] \
+        && ver_older "${TARGET#v}" "$CURRENT"; then
+    die "target $TARGET is OLDER than the running $CURRENT — refusing.
+       Pass --allow-downgrade if you really do want to roll back."
 fi
 
 # --- download ---

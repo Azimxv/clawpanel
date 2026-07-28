@@ -70,8 +70,9 @@ Pull the repo and re-run a subset of `install.sh` manually (rsync `panel/` to `/
 `update-xray` (installed to `/usr/local/bin`) upgrades the xray-hy core in place:
 
 ```bash
-update-xray            # upgrade to the latest stable Xray-core release
-update-xray v26.7.28   # or pin a specific version
+update-xray                 # upgrade to the newest Xray-core release
+update-xray v26.7.28        # or pin a specific version
+update-xray --stable-only   # only releases GitHub flags "latest"
 ```
 
 It downloads the official Xray build for the server's architecture, validates
@@ -79,6 +80,14 @@ the current config against the new binary before swapping, restarts
 `claw-xray-hy`, updates the version label shown in the panel Settings page, and
 **rolls back automatically** if the service fails to come up. The previous
 binary is kept at `/usr/local/bin/xray-hy.bak-<timestamp>`.
+
+XTLS ships nearly every Xray-core release as a GitHub *pre-release*, so
+`/releases/latest` lags months behind — it still pointed at v26.3.27 while
+v26.7.28 was current, which meant a bare `update-xray` would roll the core
+backwards. It now resolves the newest entry from `/releases` instead;
+`--stable-only` opts back into `/releases/latest`. Either way the script
+refuses to install a version older than the running one unless you pass
+`--allow-downgrade`.
 
 ### Upgrade the hysteria2 core
 
