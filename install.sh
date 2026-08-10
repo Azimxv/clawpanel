@@ -27,6 +27,14 @@ NODE_NAME=${NODE_NAME:-FI1}
 read -rp "Install hysteria2? [Y/n]: " INSTALL_HY2
 INSTALL_HY2=${INSTALL_HY2:-Y}
 
+read -rp "Enable REALITY (3rd protocol, direct TCP on 8443)? [y/N]: " ENABLE_REALITY_IN
+ENABLE_REALITY_IN=${ENABLE_REALITY_IN:-N}
+REALITY_SITE=www.microsoft.com
+if [[ "$ENABLE_REALITY_IN" =~ ^[Yy] ]]; then
+    read -rp "  REALITY front site (real TLS1.3+H2 host, client SNI must match) [$REALITY_SITE]: " REALITY_SITE_IN
+    REALITY_SITE=${REALITY_SITE_IN:-$REALITY_SITE}
+fi
+
 read -rp "Restore from backup tarball (path or empty for fresh): " RESTORE_PATH
 
 # --- Generate secrets ---
@@ -61,6 +69,30 @@ curl -fsSL -o /usr/local/bin/geosite.dat "$GEO_BASE/geosite.dat"
 if [[ "$INSTALL_HY2" =~ ^[Yy] ]]; then
     echo "--- Installing hysteria2 ---"
     bash <(curl -fsSL https://get.hy2.sh/) || true
+fi
+
+# --- REALITY keys (optional 3rd protocol) ---
+# xray.py only emits the REALITY inbound when ENABLE_REALITY=1 AND a private key
+# is present, so a fresh install with no keys silently has no REALITY at all.
+# Generate the keypair + shortId here so the .env below is fully provisioned.
+REALITY_ENABLE_VAL=0
+REALITY_DEST_VAL="www.microsoft.com:443"
+REALITY_SNI_VAL="www.microsoft.com"
+REALITY_PRIV=""
+REALITY_PUB=""
+REALITY_SID=""
+if [[ "$ENABLE_REALITY_IN" =~ ^[Yy] ]]; then
+    echo "--- Generating REALITY keypair ---"
+    REALITY_KEYS=$(/usr/local/bin/xray-hy x25519)
+    # xray 26.7.x prints "PrivateKey: <k>" and "Password (PublicKey): <k>"
+    REALITY_PRIV=$(printf '%s\n' "$REALITY_KEYS" | awk '/PrivateKey:/{print $NF}')
+    REALITY_PUB=$(printf '%s\n'  "$REALITY_KEYS" | awk '/PublicKey/{print $NF}')
+    REALITY_SID=$(openssl rand -hex 8)
+    [[ -n "$REALITY_PRIV" && -n "$REALITY_PUB" && -n "$REALITY_SID" ]] \
+        || { echo "ERROR: could not generate REALITY keys/shortId"; exit 1; }
+    REALITY_ENABLE_VAL=1
+    REALITY_DEST_VAL="$REALITY_SITE:443"
+    REALITY_SNI_VAL="$REALITY_SITE"
 fi
 
 # --- Panel files ---
@@ -113,6 +145,20 @@ echo "--- Writing configs ---"
 sed -e "s|__DOMAIN__|$DOMAIN|g" \
     "$REPO_DIR/panel/env.template" > /opt/clawpanel/.env
 chmod 600 /opt/clawpanel/.env
+
+# Provision REALITY into .env when enabled. env.template ships ENABLE_REALITY=0
+# with empty keys; without this the panel never renders the REALITY inbound.
+# Keys are base64url / hex — safe to use '|' as the sed delimiter.
+if [[ "$REALITY_ENABLE_VAL" == "1" ]]; then
+    sed -i \
+        -e "s|^ENABLE_REALITY=.*|ENABLE_REALITY=1|" \
+        -e "s|^REALITY_DEST=.*|REALITY_DEST=$REALITY_DEST_VAL|" \
+        -e "s|^REALITY_SNI=.*|REALITY_SNI=$REALITY_SNI_VAL|" \
+        -e "s|^REALITY_PRIVATE_KEY=.*|REALITY_PRIVATE_KEY=$REALITY_PRIV|" \
+        -e "s|^REALITY_PUBLIC_KEY=.*|REALITY_PUBLIC_KEY=$REALITY_PUB|" \
+        -e "s|^REALITY_SHORT_ID=.*|REALITY_SHORT_ID=$REALITY_SID|" \
+        /opt/clawpanel/.env
+fi
 
 # Agent env
 sed -e "s|__AGENT_SECRET__|$AGENT_SECRET|g" \
@@ -180,6 +226,7 @@ ufw allow 443/tcp comment 'nginx TLS'
 ufw allow 2053/tcp comment 'panel/xray'
 ufw allow 2083/tcp comment 'panel admin'
 [[ "$INSTALL_HY2" =~ ^[Yy] ]] && ufw allow 443/udp comment 'hysteria2'
+[[ "$REALITY_ENABLE_VAL" == "1" ]] && ufw allow 8443/tcp comment 'VLESS REALITY'
 
 # --- Start services ---
 # Order matters: the agent fetches its config from the panel, and xray-hy /
@@ -239,6 +286,13 @@ echo "  Password: $ADMIN_PASS"
 echo
 echo "  Agent secret: $AGENT_SECRET"
 echo "  XHTTP path:   $XHTTP_PATH"
+if [[ "$REALITY_ENABLE_VAL" == "1" ]]; then
+    echo
+    echo "  REALITY enabled (VLESS on TCP/8443):"
+    echo "    Public key: $REALITY_PUB"
+    echo "    Short ID:   $REALITY_SID"
+    echo "    SNI/dest:   $REALITY_SNI_VAL"
+fi
 echo
 echo "  Save these credentials — they are not shown again."
 echo "============================================"

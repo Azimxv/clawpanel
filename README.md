@@ -8,7 +8,7 @@ Self-hosted VPN panel: VLESS-XHTTP + Hysteria2 + VLESS-REALITY, with custom xray
 - **Agent**: syncs xray config from panel every 60s; reports per-user traffic (xray stats API + Hysteria2 trafficStats)
 - **xray-hy**: custom Xray 26.7.28 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
 - **Hysteria2**: standalone UDP/443, optional
-- **VLESS-REALITY**: optional 3rd protocol, direct TCP (default 8443), borrows a real site's TLS handshake — no LE cert. Off by default; enable via `ENABLE_REALITY=1` in panel `.env` (see `panel/env.template`). Client SNI must exactly match `REALITY_SNI`.
+- **VLESS-REALITY**: optional 3rd protocol, direct TCP (default 8443), borrows a real site's TLS handshake — no LE cert. Off by default; enable at install time (the installer generates the X25519 keypair + shortId, opens 8443, and fills `panel/env.template` into the panel `.env`), or later by hand via `ENABLE_REALITY=1` in the panel `.env`. Client SNI must exactly match `REALITY_SNI`.
 - **Nginx**: TLS termination on 443/2053/2083, masquerade fake site
 - **fail2ban + UFW** for SSH hardening
 
@@ -27,6 +27,7 @@ The installer asks for:
 - Let's Encrypt email
 - node name
 - whether to install Hysteria2
+- whether to enable VLESS-REALITY (if yes, the front site to borrow; keys + shortId are generated automatically)
 - optional backup tarball to restore
 
 It generates a random admin password, agent secret, and XHTTP path. Save them — they are shown only once.
