@@ -38,7 +38,7 @@ XRAY_API_PORT   = int(os.environ.get("XRAY_API_PORT",  "10085"))
 SYNC_INTERVAL   = int(os.environ.get("SYNC_INTERVAL",  "60"))
 HY2_STATS_ADDR  = os.environ.get("HY2_STATS_ADDR", "127.0.0.1:9999")
 HY2_STATS_SECRET_FILE = os.environ.get("HY2_STATS_SECRET_FILE", "/etc/hysteria/stats.secret")
-AGENT_VERSION   = "2.4.0"
+AGENT_VERSION   = "2.4.1"
 
 NGINX_CONF_PATH = "/etc/nginx/sites-enabled/claw.conf"
 FAKE_HTML_PATH  = "/var/www/fake/index.html"
@@ -144,9 +144,17 @@ def ensure_nginx():
     Path("/etc/nginx/sites-enabled").mkdir(parents=True, exist_ok=True)
     Path("/var/www/fake").mkdir(parents=True, exist_ok=True)
 
-    # Enable and start nginx
-    subprocess.run(["systemctl", "enable", "nginx"], capture_output=True, timeout=15)
-    subprocess.run(["systemctl", "start", "nginx"], capture_output=True, timeout=15)
+    # Enable and start nginx — but only when it isn't already. This runs on
+    # every sync, and a bare `systemctl enable nginx` is not free: nginx ships a
+    # SysV script, so enabling it goes through update-rc.d and costs three full
+    # systemd manager reloads per call (~1-3s of work, thousands of journal
+    # lines a day). `is-enabled`/`is-active` are just state queries.
+    if subprocess.run(["systemctl", "is-enabled", "--quiet", "nginx"],
+                      capture_output=True, timeout=15).returncode != 0:
+        subprocess.run(["systemctl", "enable", "nginx"], capture_output=True, timeout=15)
+    if subprocess.run(["systemctl", "is-active", "--quiet", "nginx"],
+                      capture_output=True, timeout=15).returncode != 0:
+        subprocess.run(["systemctl", "start", "nginx"], capture_output=True, timeout=15)
     return True
 
 
