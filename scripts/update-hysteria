@@ -24,8 +24,11 @@ set -euo pipefail
 
 BIN=/usr/local/bin/hysteria
 SERVICE=hysteria
-REPO_API="https://api.github.com/repos/apernet/hysteria"
-DL_BASE="https://github.com/apernet/hysteria/releases/download"
+# The project moved from apernet/ to HyNetworks/ in 2026. GitHub still redirects
+# the old paths, but the API answers those with a bare 301 that only `curl -L`
+# follows — so point at the new org directly rather than relying on that.
+REPO_API="https://api.github.com/repos/HyNetworks/hysteria"
+DL_BASE="https://github.com/HyNetworks/hysteria/releases/download"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
