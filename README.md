@@ -6,7 +6,7 @@ Self-hosted VPN panel: VLESS-XHTTP + Hysteria2 + VLESS-REALITY, with custom xray
 
 - **Panel**: FastAPI + SQLite, listens on `127.0.0.1:3100`
 - **Agent**: syncs xray config from panel every 60s; reports per-user traffic (xray stats API + Hysteria2 trafficStats)
-- **xray-hy**: custom Xray 26.7.28 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
+- **xray-hy**: custom Xray 26.9.8 build, two VLESS-XHTTP inbounds (EXIT 10443, DIRECT 12052)
 - **Hysteria2**: standalone UDP/443, optional
 - **VLESS-REALITY**: optional 3rd protocol, direct TCP (default 8443), borrows a real site's TLS handshake — no LE cert. Off by default; enable at install time (the installer generates the X25519 keypair + shortId, opens 8443, and fills `panel/env.template` into the panel `.env`), or later by hand via `ENABLE_REALITY=1` in the panel `.env`. Client SNI must exactly match `REALITY_SNI`.
 - **Nginx**: TLS termination on 443/2053/2083, masquerade fake site
